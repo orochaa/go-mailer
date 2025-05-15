@@ -3,11 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
 	"net/http"
 	"net/smtp"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -77,18 +76,14 @@ func MailListener(listenerId int, mailChannel chan EmailMessage, mailServer SMTP
 
 func CreateMailHandler(mailChannel chan EmailMessage) http.HandlerFunc {
 	return func(res http.ResponseWriter, req *http.Request) {
-		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			http.Error(res, "Error reading request body", http.StatusInternalServerError)
-			return
-		}
 		var message EmailMessage
-		err = json.Unmarshal(body, &message)
+		err := json.NewDecoder(req.Body).Decode(&message)
 		if err != nil {
 			http.Error(res, "Error parsing request body", http.StatusBadRequest)
 			return
 		}
 		mailChannel <- message
+
 		response := ResponseMessage{
 			Message: "Mail added to mail queue",
 		}
@@ -104,7 +99,7 @@ func CreateMailHandler(mailChannel chan EmailMessage) http.HandlerFunc {
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		fmt.Println("Error loading .env file")
 	}
 
 	mailChannel := make(chan EmailMessage)
@@ -115,13 +110,28 @@ func main() {
 		Password: os.Getenv("MAILER_PASS"),
 	}
 
-	for i := 0; i < 10; i++ {
+	var workers int = 10
+	if workersEnv := os.Getenv("WORKERS"); workersEnv != "" {
+		parsedWorkers, err := strconv.ParseInt(workersEnv, 10, 64)
+		if err == nil {
+			workers = int(parsedWorkers)
+		}
+	}
+
+	for i := range workers {
 		go MailListener(i, mailChannel, mailServer)
 	}
 
 	http.HandleFunc("/", CreateMailHandler(mailChannel))
 
 	port := 3000
+	if portEnv := os.Getenv("PORT"); portEnv != "" {
+		parsedPort, err := strconv.ParseInt(portEnv, 10, 64)
+		if err == nil {
+			port = int(parsedPort)
+		}
+	}
+
 	fmt.Println("Server running on port", port)
 	err = http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 	if err != nil {
