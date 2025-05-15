@@ -1,0 +1,18 @@
+services:
+  go-mailer:
+    container_name: go-mailer
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'
+    environment:
+      - MAILER_HOST=${MAILER_HOST}
+      - MAILER_PORT=${MAILER_PORT}
+      - MAILER_USER=${MAILER_USER}
+      - MAILER_PASS=${MAILER_PASS}
+      - MAILER_PASS=${MAILER_PASS}
+      - PORT=${PORT}
+      - WORKERS=${WORKERS}
+    command: /go-mailer
